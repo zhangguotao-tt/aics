@@ -1,0 +1,37 @@
+# Python 缓存文件
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 环境配置（含密钥）
+.env
+.env.local
+.env.*.local
+
+# 数据目录（不打入镜像，通过 Volume 挂载）
+data/
+logs/
+
+# 开发工具
+.git/
+.gitignore
+*.md
+docs/
+tests/
+scripts/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 临时文件
+*.tmp
+*.bak
