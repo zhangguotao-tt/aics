@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = 7
 
     # ── LLM ───────────────────────────────────────────────
-    llm_provider: Literal["openai", "ollama", "azure_openai"] = "openai"
+    llm_provider: Literal["openai", "ollama", "azure_openai", "deepseek"] = "openai"
 
     # OpenAI
     openai_api_key: str = ""
@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     openai_max_tokens: int = 2048
     openai_temperature: float = 0.7
+
+    # DeepSeek
+    deepseek_api_key: str = ""
+    deepseek_api_base: str = "https://api.deepseek.com"
+    deepseek_chat_model: str = "deepseek-chat"
+    deepseek_embedding_model: str = "deepseek-embedding-v2"
+    deepseek_max_tokens: int = 2048
+    deepseek_temperature: float = 0.7
 
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
@@ -106,6 +114,8 @@ class Settings(BaseSettings):
             return self.ollama_model
         elif self.llm_provider == "azure_openai":
             return self.azure_openai_deployment_name
+        elif self.llm_provider == "deepseek":
+            return self.deepseek_chat_model
         return self.openai_chat_model
 
 

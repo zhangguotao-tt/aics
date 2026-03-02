@@ -36,6 +36,18 @@ def _build_llm() -> BaseChatModel:
             streaming=True,
         )
 
+    elif provider == "deepseek":
+        from langchain_openai import ChatOpenAI
+        logger.info(f"使用 DeepSeek 模型: {settings.deepseek_chat_model}")
+        return ChatOpenAI(
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_api_base,
+            model=settings.deepseek_chat_model,
+            max_tokens=settings.deepseek_max_tokens,
+            temperature=settings.deepseek_temperature,
+            streaming=True,
+        )
+
     elif provider == "ollama":
         from langchain_community.chat_models import ChatOllama
         logger.info(f"使用 Ollama 本地模型: {settings.ollama_model}")
@@ -71,6 +83,14 @@ def _build_embedding_model():
             api_key=settings.openai_api_key,
             base_url=settings.openai_api_base,
             model=settings.openai_embedding_model,
+        )
+
+    elif provider == "deepseek":
+        from langchain_openai import OpenAIEmbeddings
+        return OpenAIEmbeddings(
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_api_base,
+            model=settings.deepseek_embedding_model,
         )
 
     elif provider == "ollama":
