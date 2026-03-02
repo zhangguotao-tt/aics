@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI
 base = "https://api.deepseek.com"
 # logger.info(f"使用 DeepSeek 模型: {settings.deepseek_chat_model} base_url={base}")
 llm = ChatOpenAI(
-        api_key="sk-56cf967e46bd40a3bdc5d67fce67384f",
+        api_key="",
         base_url=base,
         model="deepseek-chat",
         max_tokens=2048,

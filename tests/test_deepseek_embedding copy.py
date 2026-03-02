@@ -4,7 +4,7 @@ from langchain_community.embeddings import DashScopeEmbeddings
 # from langchain_community.llms import Tongyi
 
 # DEEPSEEK_API_URL = "https://api.deepseek.com/v1/embeddings"
-API_KEY = "sk-4a77f2477fc244c194cacdd668fae556"
+API_KEY = ""
 
 
 
