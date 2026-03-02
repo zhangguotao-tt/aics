@@ -37,9 +37,10 @@
 
 | 层级 | 技术 | 版本 |
 |------|------|------|
-| 后端框架 | FastAPI | 0.109+ |
-| LLM编排 | LangChain | 0.2+ |
-| LLM模型 | OpenAI GPT-4 / Ollama | - |
+| 后端框架 | FastAPI | 0.115+ |
+| LLM 编排 | LangChain | 0.3+ |
+| LLM 模型 | OpenAI / DeepSeek / Ollama / Azure OpenAI | - |
+| Embedding | OpenAI / 千问 DashScope / Ollama（按 LLM 方案切换） | - |
 | 向量数据库 | ChromaDB | 0.5+ |
 | 关系数据库 | PostgreSQL | 15+ |
 | 缓存 | Redis | 7+ |
@@ -51,7 +52,7 @@
 ## 📁 项目结构
 
 ```
-llm_example/
+aics-tt/
 ├── backend/                    # 后端服务
 │   ├── main.py                 # FastAPI 入口
 │   ├── config.py               # 全局配置
@@ -66,11 +67,10 @@ llm_example/
 │   │       └── rate_limit.py   # 限流中间件
 │   ├── core/                   # 核心业务逻辑
 │   │   ├── llm/
-│   │   │   ├── client.py       # LLM 客户端 (OpenAI/Ollama)
+│   │   │   ├── client.py       # LLM 客户端 (OpenAI/DeepSeek/Ollama/Azure)
 │   │   │   └── prompt_manager.py # Prompt 模板管理
 │   │   ├── rag/
-│   │   │   ├── embedder.py     # 文本向量化
-│   │   │   ├── retriever.py    # 相似度检索
+│   │   │   ├── retriever.py    # RAG 检索（向量化+相似度检索）
 │   │   │   └── vector_store.py # ChromaDB 管理
 │   │   ├── memory/
 │   │   │   └── conversation_memory.py # 对话上下文记忆
@@ -82,8 +82,7 @@ llm_example/
 │   │   └── knowledge.py
 │   ├── services/               # 业务服务层
 │   │   ├── chat_service.py     # 对话编排服务
-│   │   ├── auth_service.py     # 用户认证
-│   │   └── quality_service.py  # 质量评估
+│   │   └── auth_service.py     # 用户认证
 │   ├── db/                     # 数据库连接
 │   │   └── database.py
 │   └── utils/                  # 工具类
@@ -116,17 +115,29 @@ llm_example/
 ├── docs/
 │   ├── architecture.md         # 系统架构文档
 │   └── api.md                  # 完整 API 接口文档
-├── scripts/
-│   ├── init_db.py              # 数据库初始化
-│   └── load_knowledge.py       # 知识库批量导入
+├── scripts/                    # 可选脚本（按需添加）
 ├── data/
 │   ├── knowledge/              # 知识库文档（放入待导入文件）
 │   └── chroma_db/              # 向量数据库持久化
 ├── logs/                       # 运行日志（自动创建）
 ├── docker-compose.yml
-├── .env.example
-└── requirements.txt
+├── .env                        # 环境变量（复制 .env.example 或从文档配置）
+├── backend/requirements.txt
+└── frontend/package.json
 ```
+
+## 🔌 LLM 与 Embedding 方案说明
+
+| `LLM_PROVIDER` | 聊天模型 | RAG 向量化（Embedding） |
+|----------------|----------|--------------------------|
+| `openai` | OpenAI（如 gpt-4o-mini） | OpenAI（如 text-embedding-3-small） |
+| `deepseek` | DeepSeek（deepseek-chat） | **千问 DashScope**（text-embedding-v3），需配置 `DASHSCOPE_API_KEY` |
+| `ollama` | Ollama 本地模型（如 qwen2.5:7b） | Ollama（nomic-embed-text） |
+| `azure_openai` | Azure OpenAI 部署 | Azure OpenAI Embeddings |
+
+选择 DeepSeek 时，RAG 知识库检索使用阿里云通义千问的 Embedding 接口（DashScope），需在 [阿里云百炼](https://dashscope.aliyun.com/) 开通并配置 `DASHSCOPE_API_KEY` 与 `DASHSCOPE_EMBEDDING_MODEL`。
+
+---
 
 ## 🚀 快速开始
 
@@ -147,13 +158,13 @@ sudo mkdir -p /etc/systemd/system/ollama.service.d
 echo -e '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"' | sudo tee /etc/systemd/system/ollama.service.d/override.conf
 sudo systemctl daemon-reload && sudo systemctl restart ollama
 
-# 4. 克隆项目
-git clone git@github.com:DJsummer/Intelligent-Customer-Service.git
-cd Intelligent-Customer-Service
+# 4. 克隆项目并进入目录
+git clone <你的仓库地址> aics-tt
+cd aics-tt
 
-# 5. 配置环境变量（.env.example 默认已是 Ollama 配置）
-cp .env.example .env
-# 只需修改数据库密码等必填项，LLM 相关无需修改
+# 5. 配置环境变量
+cp .env.example .env   # 若无 .env.example 则复制项目内 .env 并改名为备份后编辑 .env
+# 设置 LLM_PROVIDER=ollama，并配置数据库密码等必填项
 
 # 6. 启动所有服务
 docker compose up -d
@@ -166,19 +177,23 @@ docker compose ps
 # API 文档:   http://localhost:8000/docs
 ```
 
-### 方式二：OpenAI API + Docker Compose
+### 方式二：DeepSeek（聊天）+ 千问 DashScope（RAG 向量化）+ Docker Compose
+
+聊天使用 DeepSeek，RAG 知识库检索使用阿里云通义千问 Embedding（需 DashScope API Key）。
 
 ```bash
-# 1. 克隆项目
-git clone git@github.com:DJsummer/Intelligent-Customer-Service.git
-cd Intelligent-Customer-Service
+# 1. 克隆项目并进入目录
+git clone <你的仓库地址> aics-tt
+cd aics-tt
 
 # 2. 配置环境变量
-cp .env.example .env
-vi .env   # 修改以下关键项：
-          # LLM_PROVIDER=openai
-          # OPENAI_API_KEY=sk-your-key
-          # POSTGRES_PASSWORD=your-password
+# 编辑 .env，设置：
+#   LLM_PROVIDER=deepseek
+#   DEEPSEEK_API_KEY=sk-xxx          # DeepSeek 开放平台 API Key
+#   DASHSCOPE_API_KEY=sk-xxx          # 阿里云百炼 / DashScope API Key（千问 Embedding）
+#   DASHSCOPE_EMBEDDING_MODEL=text-embedding-v3
+#   POSTGRES_PASSWORD=your-password
+#   DATABASE_URL=postgresql+asyncpg://cs_user:your-password@postgres:5432/customer_service
 
 # 3. 启动所有服务
 docker compose up -d
@@ -188,25 +203,43 @@ docker compose up -d
 # API 文档:   http://localhost:8000/docs
 ```
 
-### 方式三：本地开发模式（不使用 Docker）
+### 方式三：OpenAI API + Docker Compose
+
+```bash
+# 1. 克隆项目并进入目录
+git clone <你的仓库地址> aics-tt
+cd aics-tt
+
+# 2. 配置环境变量
+# 编辑 .env：
+#   LLM_PROVIDER=openai
+#   OPENAI_API_KEY=sk-your-key
+#   POSTGRES_PASSWORD=your-password
+#   DATABASE_URL=...
+
+# 3. 启动所有服务
+docker compose up -d
+
+# 4. 访问系统
+# 前端界面:    http://localhost
+# API 文档:   http://localhost:8000/docs
+```
+
+### 方式四：本地开发模式（不使用 Docker）
 
 ```bash
 # 环境要求：Python 3.11+、Node.js 20+、PostgreSQL 15+、Redis 7+
 
 # 1. 安装 Python 依赖
-pip install -r requirements.txt
+cd backend && pip install -r requirements.txt
 
 # 2. 配置环境变量
-cp .env.example .env
-# 编辑 .env 设置数据库连接信息
+# 复制并编辑 .env，设置数据库连接、LLM_PROVIDER 及对应 API Key
 
 # 3. 初始化数据库（创建表 + 默认管理员账号）
-cd backend && python ../scripts/init_db.py
+# 使用 Alembic 或项目提供的初始化方式（见 backend 文档）
 
-# 4. 导入知识库文档
-mkdir -p data/knowledge
-# 将 PDF/DOCX/TXT/MD 文档放入 data/knowledge/
-python scripts/load_knowledge.py --dir data/knowledge
+# 4. 知识库文档可通过前端「知识库管理」上传，或放入 data/ 后由后端导入
 
 # 5. 启动后端
 cd backend
@@ -249,7 +282,7 @@ npm install && npm run dev
 | GET  | `/admin/users` | 用户列表 | admin |
 | GET  | `/health` | 健康检查 | ❌ |
 
-📖 完整接口文档见 [docs/api.md](docs/api.md) 或访问 `http://localhost:8000/docs`
+📖 完整接口文档可访问 `http://localhost:8000/docs`（开发环境下）
 
 ---
 
@@ -257,14 +290,20 @@ npm install && npm run dev
 
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
-| `LLM_PROVIDER` | ❌ | `ollama` | `openai` / `ollama` / `azure_openai` |
-| `OLLAMA_BASE_URL` | Ollama必填 | `http://host.docker.internal:11434` | Docker内访问宿主机Ollama |
+| `LLM_PROVIDER` | ❌ | `openai` | `openai` / `ollama` / `azure_openai` / `deepseek` |
+| `OLLAMA_BASE_URL` | Ollama 时 | `http://host.docker.internal:11434` | Docker 内访问宿主机 Ollama |
 | `OLLAMA_MODEL` | ❌ | `qwen2.5:7b` | Ollama 聊天模型名 |
-| `OPENAI_API_KEY` | OpenAI必填 | - | OpenAI API 密钥 |
+| `OPENAI_API_KEY` | OpenAI 时 | - | OpenAI API 密钥 |
+| `OPENAI_EMBEDDING_MODEL` | ❌ | `text-embedding-3-small` | OpenAI 向量模型（LLM=openai 时 RAG 使用） |
+| `DEEPSEEK_API_KEY` | DeepSeek 时 | - | DeepSeek 开放平台 API Key（聊天） |
+| `DEEPSEEK_API_BASE` | ❌ | `https://api.deepseek.com` | DeepSeek API 地址（勿加 `/v1`） |
+| `DASHSCOPE_API_KEY` | DeepSeek 时 | - | 阿里云 DashScope API Key（千问 Embedding，RAG 向量化） |
+| `DASHSCOPE_EMBEDDING_MODEL` | ❌ | `text-embedding-v3` | 千问 Embedding 模型（仅当 LLM=deepseek 时生效） |
 | `POSTGRES_PASSWORD` | ✅ | - | PostgreSQL 密码 |
 | `DATABASE_URL` | ✅ | - | PostgreSQL 连接串 |
 | `REDIS_URL` | ❌ | `redis://redis:6379/0` | Redis 连接串 |
-| `SECRET_KEY` | ✅ | - | JWT 签名密钥（生产必须修改） |
+| `SECRET_KEY` | ✅ | - | 应用密钥（生产必须修改） |
+| `JWT_SECRET_KEY` | ✅ | - | JWT 签名密钥（生产必须修改） |
 
 ---
 
@@ -274,7 +313,7 @@ npm install && npm run dev
 - ✅ **RAG 检索增强** — ChromaDB 向量检索 + 多级缓存（L1 内存 + L2 Redis）
 - ✅ **意图识别** — 规则优先 + LLM 兜底，自动识别 6 类用户意图
 - ✅ **流式输出** — WebSocket 实时 Token 流式传输，毫秒级首字节响应
-- ✅ **多模型支持** — OpenAI / Ollama（本地部署）/ Azure OpenAI 无缝切换
+- ✅ **多模型支持** — OpenAI / DeepSeek / Ollama / Azure OpenAI 无缝切换；DeepSeek 可选搭配千问 Embedding 做 RAG
 - ✅ **JWT 认证** — Access Token（1h）+ Refresh Token（7d），登录锁定保护
 - ✅ **性能优化** — Embedding 批量缓存（TTL 24h）、热点知识预热、DB 连接池
 - ✅ **结构化日志** — request_id 传播、LLM 调用追踪、JSON Lines 审计日志
@@ -416,11 +455,11 @@ ollama create qwen2.5-customer-service -f Modelfile
 ## 🧪 运行测试
 
 ```bash
+# 在项目根目录
 cd backend
-# 安装测试依赖
-pip install pytest pytest-asyncio httpx
+pip install -r requirements.txt   # 已含 pytest 等
 
-# 运行全部测试
+# 运行全部测试（需设置 PYTHONPATH 或从项目根执行）
 pytest ../tests/ -v
 
 # 仅运行单元测试
