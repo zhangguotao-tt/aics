@@ -38,10 +38,13 @@ def _build_llm() -> BaseChatModel:
 
     elif provider == "deepseek":
         from langchain_openai import ChatOpenAI
-        logger.info(f"使用 DeepSeek 模型: {settings.deepseek_chat_model}")
+        # DeepSeek 官方文档: POST https://api.deepseek.com/chat/completions（无 /v1）
+        # OpenAI 客户端会拼接 /chat/completions，故 base 不要带 /v1
+        base = (settings.deepseek_api_base or "https://api.deepseek.com").rstrip("/")
+        logger.info(f"使用 DeepSeek 模型: {settings.deepseek_chat_model} base_url={base}")
         return ChatOpenAI(
             api_key=settings.deepseek_api_key,
-            base_url=settings.deepseek_api_base,
+            base_url=base,
             model=settings.deepseek_chat_model,
             max_tokens=settings.deepseek_max_tokens,
             temperature=settings.deepseek_temperature,
