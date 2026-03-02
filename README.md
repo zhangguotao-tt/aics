@@ -37,74 +37,46 @@
 
 | 层级 | 技术 | 版本 |
 |------|------|------|
-| 后端框架 | FastAPI | 0.109+ |
-| LLM编排 | LangChain | 0.2+ |
-| LLM模型 | OpenAI GPT-4 / Ollama | - |
+| 后端框架 | FastAPI | 0.115+ |
+| LLM 编排 | LangChain | 0.3+ |
+| LLM 模型 | OpenAI / Ollama / Azure OpenAI | - |
 | 向量数据库 | ChromaDB | 0.5+ |
 | 关系数据库 | PostgreSQL | 15+ |
 | 缓存 | Redis | 7+ |
 | 前端框架 | Vue 3 + Vite | - |
 | 认证 | JWT (python-jose) | - |
 | 容器化 | Docker + Docker Compose | - |
-| 测试 | Pytest | 7+ |
+| 测试 | Pytest | 8+ |
 
 ## 📁 项目结构
 
 ```
-llm_example/
+aics-tt/
 ├── backend/                    # 后端服务
 │   ├── main.py                 # FastAPI 入口
-│   ├── config.py               # 全局配置
-│   ├── api/                    # API 路由层
-│   │   ├── routes/
-│   │   │   ├── chat.py         # 对话接口
-│   │   │   ├── auth.py         # 认证接口
-│   │   │   ├── knowledge.py    # 知识库接口
-│   │   │   └── admin.py        # 管理后台接口
-│   │   └── middleware/
-│   │       ├── auth.py         # 认证中间件
-│   │       └── rate_limit.py   # 限流中间件
-│   ├── core/                   # 核心业务逻辑
-│   │   ├── llm/
-│   │   │   ├── client.py       # LLM 客户端 (OpenAI/Ollama)
-│   │   │   └── prompt_manager.py # Prompt 模板管理
-│   │   ├── rag/
-│   │   │   ├── embedder.py     # 文本向量化
-│   │   │   ├── retriever.py    # 相似度检索
-│   │   │   └── vector_store.py # ChromaDB 管理
-│   │   ├── memory/
-│   │   │   └── conversation_memory.py # 对话上下文记忆
-│   │   └── intent/
-│   │       └── classifier.py   # 意图识别分类器
-│   ├── models/                 # 数据模型 (SQLAlchemy)
-│   │   ├── user.py
-│   │   ├── conversation.py
-│   │   └── knowledge.py
-│   ├── services/               # 业务服务层
-│   │   ├── chat_service.py     # 对话编排服务
-│   │   ├── auth_service.py     # 用户认证
-│   │   └── quality_service.py  # 质量评估
-│   ├── db/                     # 数据库连接
-│   │   └── database.py
-│   └── utils/                  # 工具类
-│       ├── logger.py           # 结构化日志+审计
-│       └── performance.py      # 多级缓存+性能优化
-├── frontend/                   # Vue3 前端
-│   ├── index.html
-│   ├── vite.config.js
-│   ├── nginx.conf              # Nginx 生产配置
-│   ├── Dockerfile              # 多阶段构建
-│   ├── package.json
+│   ├── config.py               # 全局配置 (pydantic-settings)
+│   ├── api/
+│   │   ├── routes/             # REST：chat / auth / knowledge / admin
+│   │   └── middleware/         # auth（JWT）、rate_limit
+│   ├── core/
+│   │   ├── llm/                # client（OpenAI/Ollama/Azure）、prompt_manager
+│   │   ├── rag/                # retriever、vector_store、embedder（若存在）
+│   │   ├── memory/             # conversation_memory
+│   │   └── intent/             # classifier
+│   ├── models/                 # user、conversation、knowledge
+│   ├── services/               # chat_service、auth_service、quality_service
+│   ├── db/                     # database（asyncpg）
+│   ├── utils/                  # logger、cache、performance
+│   ├── requirements.txt
+│   └── Dockerfile
+├── frontend/                   # Vue3 + Vite + Tailwind
+│   ├── index.html、vite.config.js、tailwind.config.js
+│   ├── nginx.conf、Dockerfile、package.json
 │   └── src/
-│       ├── App.vue
-│       ├── components/
-│       │   ├── ChatWindow.vue  # 聊天主窗口
-│       │   ├── MessageBubble.vue # 消息气泡
-│       │   └── KnowledgeAdmin.vue # 知识库管理
-│       ├── store/
-│       │   └── chat.js         # Pinia 状态管理
-│       └── api/
-│           └── index.js        # API 请求封装
+│       ├── App.vue、main.js、style.css
+│       ├── components/         # ChatWindow、MessageBubble、KnowledgeAdmin
+│       ├── store/chat.js
+│       └── api/index.js
 ├── tests/
 │   ├── conftest.py             # pytest 公共 fixtures
 │   ├── unit/                   # 单元测试
@@ -119,13 +91,11 @@ llm_example/
 ├── scripts/
 │   ├── init_db.py              # 数据库初始化
 │   └── load_knowledge.py       # 知识库批量导入
-├── data/
-│   ├── knowledge/              # 知识库文档（放入待导入文件）
-│   └── chroma_db/              # 向量数据库持久化
-├── logs/                       # 运行日志（自动创建）
+├── data/                       # ChromaDB、知识库等（运行时生成）
+├── logs/
 ├── docker-compose.yml
-├── .env.example
-└── requirements.txt
+├── .env                        # 环境变量（参考项目内说明，勿提交密钥）
+└── README.md
 ```
 
 ## 🚀 快速开始
@@ -147,13 +117,12 @@ sudo mkdir -p /etc/systemd/system/ollama.service.d
 echo -e '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"' | sudo tee /etc/systemd/system/ollama.service.d/override.conf
 sudo systemctl daemon-reload && sudo systemctl restart ollama
 
-# 4. 克隆项目
-git clone git@github.com:DJsummer/Intelligent-Customer-Service.git
-cd Intelligent-Customer-Service
+# 4. 克隆项目并进入目录
+git clone <你的仓库地址> aics-tt
+cd aics-tt
 
-# 5. 配置环境变量（.env.example 默认已是 Ollama 配置）
-cp .env.example .env
-# 只需修改数据库密码等必填项，LLM 相关无需修改
+# 5. 配置环境变量
+# 复制或新建 .env，设置 LLM_PROVIDER=ollama、POSTGRES_PASSWORD、DATABASE_URL 等
 
 # 6. 启动所有服务
 docker compose up -d
@@ -169,50 +138,30 @@ docker compose ps
 ### 方式二：OpenAI API + Docker Compose
 
 ```bash
-# 1. 克隆项目
-git clone git@github.com:DJsummer/Intelligent-Customer-Service.git
-cd Intelligent-Customer-Service
+# 1. 克隆并进入项目
+git clone <你的仓库地址> aics-tt && cd aics-tt
 
-# 2. 配置环境变量
-cp .env.example .env
-vi .env   # 修改以下关键项：
-          # LLM_PROVIDER=openai
-          # OPENAI_API_KEY=sk-your-key
-          # POSTGRES_PASSWORD=your-password
+# 2. 配置 .env：LLM_PROVIDER=openai、OPENAI_API_KEY=sk-xxx、POSTGRES_PASSWORD、DATABASE_URL
 
-# 3. 启动所有服务
+# 3. 启动
 docker compose up -d
 
-# 4. 访问系统
-# 前端界面:    http://localhost
-# API 文档:   http://localhost:8000/docs
+# 4. 访问：前端 http://localhost ，API 文档 http://localhost:8000/docs
 ```
 
-### 方式三：本地开发模式（不使用 Docker）
+### 方式三：本地开发（不用 Docker）
 
 ```bash
-# 环境要求：Python 3.11+、Node.js 20+、PostgreSQL 15+、Redis 7+
+# 需：Python 3.11+、Node 20+、PostgreSQL 15+、Redis 7+
 
-# 1. 安装 Python 依赖
-pip install -r requirements.txt
-
-# 2. 配置环境变量
-cp .env.example .env
-# 编辑 .env 设置数据库连接信息
-
-# 3. 初始化数据库（创建表 + 默认管理员账号）
-cd backend && python ../scripts/init_db.py
-
-# 4. 导入知识库文档
-mkdir -p data/knowledge
-# 将 PDF/DOCX/TXT/MD 文档放入 data/knowledge/
-python scripts/load_knowledge.py --dir data/knowledge
-
-# 5. 启动后端
+# 1. 后端
 cd backend
+pip install -r requirements.txt
+# 配置 .env（数据库、REDIS_URL、LLM_PROVIDER 等）
+# 数据库迁移/初始化后启动：
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# 6. 启动前端（新终端）
+# 2. 前端（新终端）
 cd frontend
 npm install && npm run dev
 # 访问 http://localhost:5173
@@ -230,26 +179,28 @@ npm install && npm run dev
 
 ## 📡 API 接口摘要
 
+接口统一前缀为 **`/api`**（除 WebSocket、健康检查外）。
+
 | 方法 | 路径 | 描述 | 认证 |
 |------|------|------|------|
-| POST | `/auth/register` | 用户注册 | ❌ |
-| POST | `/auth/login` | 用户登录 | ❌ |
-| GET  | `/auth/me` | 当前用户信息 | ✅ |
-| POST | `/chat/message` | 发送消息（REST） | 可选 |
-| GET  | `/chat/history/{session_id}` | 对话历史 | ✅ |
-| POST | `/chat/end/{session_id}` | 结束会话 | ✅ |
-| POST | `/chat/feedback` | 消息评分 | ✅ |
-| WS   | `/ws/chat/{session_id}` | WebSocket 流式对话 | ✅ |
-| POST | `/knowledge/upload` | 上传知识文档 | agent+ |
-| GET  | `/knowledge/list` | 文档列表 | agent+ |
-| DELETE | `/knowledge/{id}` | 删除文档 | admin |
-| POST | `/knowledge/search` | 语义搜索 | ✅ |
-| GET  | `/admin/stats` | 系统统计 | admin |
-| GET  | `/admin/conversations` | 对话列表 | admin |
-| GET  | `/admin/users` | 用户列表 | admin |
+| POST | `/api/auth/register` | 用户注册 | ❌ |
+| POST | `/api/auth/login` | 用户登录 | ❌ |
+| GET  | `/api/auth/me` | 当前用户信息 | ✅ |
+| POST | `/api/chat/message` | 发送消息（REST） | 可选 |
+| GET  | `/api/chat/history/{session_id}` | 对话历史 | ✅ |
+| POST | `/api/chat/end/{session_id}` | 结束会话 | ✅ |
+| POST | `/api/chat/feedback` | 消息评分 | ✅ |
+| WS   | `/ws/chat/{session_id}` | WebSocket 流式对话 | 可选 Token |
+| POST | `/api/knowledge/upload` | 上传知识文档 | agent+ |
+| GET  | `/api/knowledge/list` | 文档列表 | agent+ |
+| DELETE | `/api/knowledge/{id}` | 删除文档 | admin |
+| POST | `/api/knowledge/search` | 语义搜索 | ✅ |
+| GET  | `/api/admin/stats` | 系统统计 | admin |
+| GET  | `/api/admin/conversations` | 对话列表 | admin |
+| GET  | `/api/admin/users` | 用户列表 | admin |
 | GET  | `/health` | 健康检查 | ❌ |
 
-📖 完整接口文档见 [docs/api.md](docs/api.md) 或访问 `http://localhost:8000/docs`
+📖 完整接口见 [docs/api.md](docs/api.md) 或运行后访问 `http://localhost:8000/docs`
 
 ---
 
@@ -257,14 +208,16 @@ npm install && npm run dev
 
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
-| `LLM_PROVIDER` | ❌ | `ollama` | `openai` / `ollama` / `azure_openai` |
-| `OLLAMA_BASE_URL` | Ollama必填 | `http://host.docker.internal:11434` | Docker内访问宿主机Ollama |
-| `OLLAMA_MODEL` | ❌ | `qwen2.5:7b` | Ollama 聊天模型名 |
-| `OPENAI_API_KEY` | OpenAI必填 | - | OpenAI API 密钥 |
+| `LLM_PROVIDER` | ❌ | `openai` | `openai` / `ollama` / `azure_openai` |
+| `OLLAMA_BASE_URL` | Ollama 时 | `http://host.docker.internal:11434` | Docker 内访问宿主机 Ollama |
+| `OLLAMA_MODEL` | ❌ | `qwen2.5:7b` | Ollama 聊天模型 |
+| `OPENAI_API_KEY` | OpenAI 时 | - | OpenAI API 密钥 |
+| `OPENAI_EMBEDDING_MODEL` | ❌ | `text-embedding-3-small` | RAG 向量模型（LLM=openai 时） |
 | `POSTGRES_PASSWORD` | ✅ | - | PostgreSQL 密码 |
-| `DATABASE_URL` | ✅ | - | PostgreSQL 连接串 |
+| `DATABASE_URL` | ✅ | - | 连接串，如 `postgresql+asyncpg://user:pass@host:5432/db` |
 | `REDIS_URL` | ❌ | `redis://redis:6379/0` | Redis 连接串 |
-| `SECRET_KEY` | ✅ | - | JWT 签名密钥（生产必须修改） |
+| `SECRET_KEY` | ✅ | - | 应用密钥（生产必改） |
+| `JWT_SECRET_KEY` | ✅ | - | JWT 签名（生产必改） |
 
 ---
 
@@ -274,7 +227,7 @@ npm install && npm run dev
 - ✅ **RAG 检索增强** — ChromaDB 向量检索 + 多级缓存（L1 内存 + L2 Redis）
 - ✅ **意图识别** — 规则优先 + LLM 兜底，自动识别 6 类用户意图
 - ✅ **流式输出** — WebSocket 实时 Token 流式传输，毫秒级首字节响应
-- ✅ **多模型支持** — OpenAI / Ollama（本地部署）/ Azure OpenAI 无缝切换
+- ✅ **多模型支持** — OpenAI / Ollama（本地）/ Azure OpenAI，通过 `LLM_PROVIDER` 切换
 - ✅ **JWT 认证** — Access Token（1h）+ Refresh Token（7d），登录锁定保护
 - ✅ **性能优化** — Embedding 批量缓存（TTL 24h）、热点知识预热、DB 连接池
 - ✅ **结构化日志** — request_id 传播、LLM 调用追踪、JSON Lines 审计日志
@@ -417,20 +370,19 @@ ollama create qwen2.5-customer-service -f Modelfile
 
 ```bash
 cd backend
-# 安装测试依赖
-pip install pytest pytest-asyncio httpx
+pip install -r requirements.txt   # 已含 pytest、pytest-asyncio、httpx
 
-# 运行全部测试
+# 在项目根执行测试（或设置 PYTHONPATH 包含 backend）
 pytest ../tests/ -v
 
-# 仅运行单元测试
+# 仅单元测试
 pytest ../tests/unit/ -v
 
-# 仅运行集成测试
+# 仅集成测试
 pytest ../tests/integration/ -v
 
-# 生成覆盖率报告
-pytest ../tests/ --cov=. --cov-report=html
+# 覆盖率
+pytest ../tests/ --cov=backend --cov-report=html
 ```
 
 ---
