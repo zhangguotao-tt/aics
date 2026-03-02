@@ -41,13 +41,16 @@ class Settings(BaseSettings):
     openai_max_tokens: int = 2048
     openai_temperature: float = 0.7
 
-    # DeepSeek
+    # DeepSeek（聊天）；当 LLM=deepseek 时，RAG 向量化使用下方千问 embedding）
     deepseek_api_key: str = ""
     deepseek_api_base: str = "https://api.deepseek.com"
     deepseek_chat_model: str = "deepseek-chat"
-    deepseek_embedding_model: str = "deepseek-embedding-v2"
     deepseek_max_tokens: int = 2048
     deepseek_temperature: float = 0.7
+
+    # 千问 / DashScope（仅用于 embedding，如配合 DeepSeek 时做 RAG）
+    dashscope_api_key: str = ""
+    dashscope_embedding_model: str = "text-embedding-v3"
 
     # Ollama
     ollama_base_url: str = "http://localhost:11434"

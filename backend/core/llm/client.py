@@ -91,15 +91,21 @@ def _build_embedding_model():
         )
 
     elif provider == "deepseek":
-        from langchain_openai import OpenAIEmbeddings
-        raw = (settings.deepseek_api_base or "https://api.deepseek.com").rstrip("/")
-        base = raw.replace("/v1", "").rstrip("/") if "/v1" in raw else raw
-        if not base:
-            base = "https://api.deepseek.com"
-        return OpenAIEmbeddings(
-            api_key=settings.deepseek_api_key,
-            base_url=base,
-            model=settings.deepseek_embedding_model,
+        if not (settings.dashscope_api_key or "").strip():
+            raise ValueError(
+                "使用 DeepSeek 时需配置千问 Embedding：请在 .env 中设置 DASHSCOPE_API_KEY"
+            )
+        try:
+            from langchain_community.embeddings.dashscope import DashScopeEmbeddings
+        except ImportError:
+            from langchain_community.embeddings import DashScopeEmbeddings
+        logger.info(
+            f"使用千问 Embedding 模型: {settings.dashscope_embedding_model} "
+            f"(LLM=DeepSeek)"
+        )
+        return DashScopeEmbeddings(
+            dashscope_api_key=settings.dashscope_api_key.strip(),
+            model=settings.dashscope_embedding_model,
         )
 
     elif provider == "ollama":
