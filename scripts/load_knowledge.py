@@ -9,8 +9,12 @@ import argparse
 import sys
 from pathlib import Path
 
-# 将 backend 目录加入 Python 路径
-sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
+# 将 backend 目录加入 Python 路径（本机：项目根/backend；容器内：/app 即 backend 根）
+_backend_root = Path(__file__).resolve().parent.parent / "backend"
+if _backend_root.exists():
+    sys.path.insert(0, str(_backend_root))
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 async def load_knowledge(knowledge_dir: str, clear_existing: bool = False):
@@ -18,7 +22,7 @@ async def load_knowledge(knowledge_dir: str, clear_existing: bool = False):
     from db.database import init_db, AsyncSessionLocal
     from core.rag.embedder import DocumentEmbedder
     from core.rag.vector_store import get_vector_store
-    from models.knowledge import KnowledgeDocument, ProcessingStatus
+    from models.knowledge import KnowledgeDocument, DocumentStatus
     from utils.logger import setup_logging, get_logger
 
     setup_logging()
@@ -45,10 +49,11 @@ async def load_knowledge(knowledge_dir: str, clear_existing: bool = False):
 
     if clear_existing:
         vs = get_vector_store()
-        collection = vs.get_collection()
+        collection = vs.collection
         log.warning(f"⚠️  清空现有知识库（共 {collection.count()} 条向量）")
-        # 删除并重建 collection
         vs._client.delete_collection(settings.chroma_collection_name)
+        vs._collection = None
+        vs._initialized = False
         log.info("知识库已清空")
 
     embedder = DocumentEmbedder()
@@ -58,27 +63,29 @@ async def load_knowledge(knowledge_dir: str, clear_existing: bool = False):
         for file_path in files:
             log.info(f"处理: {file_path.name}")
             try:
-                # 创建 DB 记录
+                # 创建 DB 记录（模型字段：title 必填，file_path/file_size/description/status）
                 doc = KnowledgeDocument(
-                    filename=file_path.name,
+                    title=file_path.name,
+                    file_path=str(file_path),
                     file_size=file_path.stat().st_size,
-                    status=ProcessingStatus.PROCESSING,
+                    status=DocumentStatus.PROCESSING,
                     description=f"批量导入: {file_path.name}",
                 )
                 session.add(doc)
                 await session.flush()
 
-                # 向量化
-                result = await embedder.embed_document(
-                    file_path=str(file_path),
-                    document_id=str(doc.id),
-                    metadata={"filename": file_path.name, "source": str(file_path)},
+                # 解析文件为文本，再向量化（embed_document 参数：content, doc_id, source）
+                content = DocumentEmbedder.parse_file(str(file_path))
+                doc.file_hash = DocumentEmbedder.compute_hash(content)
+                chunk_records = await embedder.embed_document(
+                    content=content,
+                    doc_id=str(doc.id),
+                    source=file_path.name,
                 )
 
                 # 更新状态
-                doc.status = ProcessingStatus.COMPLETED
-                doc.chunk_count = result.get("chunk_count", 0)
-                doc.file_hash = result.get("file_hash", "")
+                doc.status = DocumentStatus.ACTIVE
+                doc.chunk_count = len(chunk_records)
                 await session.commit()
 
                 log.info(
@@ -88,7 +95,24 @@ async def load_knowledge(knowledge_dir: str, clear_existing: bool = False):
 
             except Exception as e:
                 await session.rollback()
-                log.error(f"  ❌ {file_path.name} 失败: {e}")
+                log.error(f"  ❌ {file_path.name} 失败: {type(e).__name__}: {e}")
+                # 补充 HTTP/API 错误详情（OpenAI、requests 等）
+                if hasattr(e, "response") and e.response is not None:
+                    try:
+                        body = getattr(e.response, "text", None) or getattr(e.response, "content", None)
+                        if body is not None:
+                            body = body if isinstance(body, str) else (body.decode("utf-8", errors="replace")[:500])
+                        status = getattr(e.response, "status_code", None)
+                        log.error(f"  响应状态: {status}, 响应体: {body}")
+                    except Exception:
+                        pass
+                if "404" in str(e):
+                    log.error(
+                        "  千问 Embedding 404 排查：1) 容器内需传入 DASHSCOPE_API_KEY / DASHSCOPE_EMBEDDING_MODEL；"
+                        "2) 可尝试 .env 中改为 DASHSCOPE_EMBEDDING_MODEL=text-embedding-v2；"
+                        "3) 确认 docker-compose 中 LLM_PROVIDER=deepseek 且已挂载 ./backend:/app"
+                    )
+                log.exception("详细异常")
                 failed += 1
 
     log.info(f"\n导入完成：成功 {success} 个，失败 {failed} 个")

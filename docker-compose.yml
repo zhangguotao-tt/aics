@@ -51,9 +51,15 @@ services:
       - REDIS_HOST=redis
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cs_user}:${POSTGRES_PASSWORD:-cs_password}@postgres:5432/${POSTGRES_DB:-customer_service}
       - REDIS_URL=redis://redis:6379/0
+      # 必须与 .env 一致：deepseek 时用千问做 RAG 向量化，否则会误用 OpenAI embedding 导致 404
+      - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_EMBEDDING_MODEL=${DASHSCOPE_EMBEDDING_MODEL:-text-embedding-v2}
     volumes:
+      - ./backend:/app           # 使用主机最新后端代码，改 client.py 后无需重建镜像
       - ./data:/app/data         # ChromaDB 持久化
       - ./logs:/app/logs         # 日志持久化
+      - ./scripts:/app/scripts   # 脚本（如 load_knowledge.py）在容器内可用
     ports:
       - "8000:8000"
     depends_on:

@@ -50,7 +50,7 @@ class Settings(BaseSettings):
 
     # 千问 / DashScope（仅用于 embedding，如配合 DeepSeek 时做 RAG）
     dashscope_api_key: str = ""
-    dashscope_embedding_model: str = "text-embedding-v3"
+    dashscope_embedding_model: str = "text-embedding-v2"  # v3 部分地域/账号易 404，可改为 text-embedding-v3
 
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
