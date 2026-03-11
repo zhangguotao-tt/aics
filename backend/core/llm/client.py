@@ -95,52 +95,29 @@ def _build_embedding_model():
             raise ValueError(
                 "使用 DeepSeek 时需配置千问 Embedding：请在 .env 中设置 DASHSCOPE_API_KEY"
             )
-        # 使用阿里云百炼 OpenAI 兼容接口调用千问（避免原生 DashScope SDK 404）
-        # 千问对批量 input 格式与 OpenAI 客户端不一致会报 400，故批量时逐条调用
-        from langchain_openai import OpenAIEmbeddings
+        import os
+        import dashscope
+        key = settings.dashscope_api_key.strip()
+        # 确保 SDK 使用我们传入的 key（避免容器内 env 未传入或与 .env 不一致）
+        os.environ["DASHSCOPE_API_KEY"] = key
+        dashscope.api_key = key
+        # 地域 endpoint：各地域 API Key 互不通用，新加坡/灵积 Key 必须指定 base_url
+        base_url = (settings.dashscope_base_url or "").strip().rstrip("/")
+        if base_url:
+            dashscope.base_http_api_url = base_url
+            logger.info(f"DashScope 使用指定地域: {base_url}")
+        # 使用原生 DashScope API（与单独脚本 DashScopeEmbeddings 一致）
+        from langchain_community.embeddings import DashScopeEmbeddings
 
-        base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
         model_name = (settings.dashscope_embedding_model or "").strip() or "text-embedding-v2"
         logger.info(
             f"使用千问 Embedding 模型: {model_name} "
-            f"(OpenAI 兼容接口, LLM=DeepSeek)"
+            f"(DashScope 原生 API, LLM=DeepSeek)"
         )
-        inner = OpenAIEmbeddings(
-            api_key=settings.dashscope_api_key.strip(),
-            base_url=base_url,
+        return DashScopeEmbeddings(
+            dashscope_api_key=key,
             model=model_name,
         )
-
-        # 不继承 Embeddings 抽象类，避免抽象方法校验导致实例化失败（脚本与 WebSocket 均可用）
-        class _DashScopeEmbeddingWrapper:
-            """千问兼容接口：直接 client.create(input=str)，逐条请求避免 400"""
-
-            def _one_embed_sync(self, text: str):
-                # inner.client 为 Embeddings 资源，直接 .create()
-                resp = inner.client.create(model=model_name, input=text)
-                return resp.data[0].embedding
-
-            async def _one_embed_async(self, text: str):
-                # inner.async_client 为 AsyncEmbeddings 资源，直接 .create()
-                resp = await inner.async_client.create(model=model_name, input=text)
-                return resp.data[0].embedding
-
-            def embed_query(self, text: str):
-                return self._one_embed_sync(text)
-
-            def embed_documents(self, texts: list[str]):
-                return [self._one_embed_sync(t) for t in texts]
-
-            async def aembed_query(self, text: str):
-                return await self._one_embed_async(text)
-
-            async def aembed_documents(self, texts: list[str]):
-                out = []
-                for t in texts:
-                    out.append(await self._one_embed_async(t))
-                return out
-
-        return _DashScopeEmbeddingWrapper()
 
     elif provider == "ollama":
         from langchain_community.embeddings import OllamaEmbeddings

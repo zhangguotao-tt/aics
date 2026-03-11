@@ -3,14 +3,20 @@
 使用 pydantic-settings 从环境变量或 .env 文件加载配置
 """
 from functools import lru_cache
+from pathlib import Path
 from typing import List, Literal
-from pydantic import Field, computed_field
+from pydantic import computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# .env 路径：Docker 挂载了 .env 到 /app/.env 时优先用该文件，否则用项目根目录 .env
+_ROOT_ENV = Path(__file__).resolve().parent.parent / ".env"
+_DOCKER_ENV = Path("/app/.env")
+_ENV_FILE = _DOCKER_ENV if _DOCKER_ENV.exists() else _ROOT_ENV
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE) if _ENV_FILE.exists() else None,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -51,6 +57,14 @@ class Settings(BaseSettings):
     # 千问 / DashScope（仅用于 embedding，如配合 DeepSeek 时做 RAG）
     dashscope_api_key: str = ""
     dashscope_embedding_model: str = "text-embedding-v2"  # v3 部分地域/账号易 404，可改为 text-embedding-v3
+    # 地域 endpoint（空则默认北京）。新加坡/灵积 Key 填: https://dashscope-intl.aliyuncs.com/api/v1
+    dashscope_base_url: str = ""
+
+    @field_validator("dashscope_api_key", mode="before")
+    @classmethod
+    def strip_dashscope_key(cls, v: str) -> str:
+        """去除首尾空白与 CRLF，避免 .env 在 Windows 下带 \\r 导致 401"""
+        return (v or "").strip()
 
     # Ollama
     ollama_base_url: str = "http://localhost:11434"

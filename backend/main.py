@@ -33,6 +33,12 @@ async def lifespan(app: FastAPI):
     """应用启动/关闭时的生命周期钩子"""
     setup_logger()
     logger.info(f"🚀 {settings.app_name} 启动 [env={settings.app_env}, llm={settings.llm_provider}]")
+    if settings.llm_provider == "deepseek":
+        k = (settings.dashscope_api_key or "").strip()
+        if k:
+            logger.info(f"千问 Embedding: DASHSCOPE_API_KEY 已加载 (sk-...{k[-4:] if len(k) >= 4 else '****'})")
+        else:
+            logger.warning("千问 Embedding: DASHSCOPE_API_KEY 未设置，RAG 调用将报 401")
 
     await init_redis()
     await init_db()
